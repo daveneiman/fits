@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>edu.harvard.huit.lts</groupId>
 	<artifactId>fits</artifactId>
-	<version>1.5.0</version>
+	<version>1.5.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>FITS</name>
@@ -42,7 +42,11 @@
 		<nzmetool.version>3.6GA</nzmetool.version>
 		<xerces-impl.version>2.9.1</xerces-impl.version>
 		<saxon.version>9.8.0-10</saxon.version>
-		<mvn-compiler-plgn.version>3.0</mvn-compiler-plgn.version>
+		<mvn-compiler-plugin.version>3.8.1</mvn-compiler-plugin.version>
+		<mvn-jar-plugin.version>3.2.0</mvn-jar-plugin.version>
+		<mvn-assembly-plugin.version>3.2.0</mvn-assembly-plugin.version>
+		<mvn-deploy-plugin.version>2.8.2</mvn-deploy-plugin.version>
+		<mvn-javadoc-plugin.version>3.1.1</mvn-javadoc-plugin.version>
 	</properties>
 
 	<build>
@@ -62,7 +66,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>${mvn-compiler-plgn.version}</version>
+				<version>${mvn-compiler-plugin.version}</version>
 				<configuration>
 					<source>${java.version}</source>
 					<target>${java.target}</target>
@@ -74,7 +78,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
-				<version>3.0.2</version>
+				<version>${mvn-jar-plugin.version}</version>
 				<configuration>
 					<archive>
 						<manifest>
@@ -89,7 +93,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-assembly-plugin</artifactId>
-				<version>3.1.0</version>
+				<version>${mvn-assembly-plugin.version}</version>
 				<configuration>
 					<descriptors>
 						<descriptor>src/assembly/assembly.xml</descriptor>
@@ -111,12 +115,12 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-deploy-plugin</artifactId>
-				<version>2.8.2</version>
+				<version>${mvn-deploy-plugin.version}</version>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-javadoc-plugin</artifactId>
-				<version>3.0.0</version>
+				<version>${mvn-javadoc-plugin.version}</version>
 				<executions>
 					<execution>
 						<goals>

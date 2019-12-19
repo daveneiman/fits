@@ -17,6 +17,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.lang.reflect.Constructor;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -49,6 +50,7 @@ import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.jdom.Document;
+import org.jdom.Element;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
 
@@ -76,6 +78,7 @@ public class Fits {
   
   private static boolean traverseDirs;
   private static boolean nestDirs; // whether traversing nested directories of input files creates nest output directories - if false, all output goes in same output directory
+  private static boolean aggregateOutputDir; // put output from all files in a (nested) directory into the same output file.
   private static XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newInstance();
 
   private static final String FITS_CONFIG_FILE_NAME = "fits.xml";
@@ -254,6 +257,7 @@ public class Fits {
     options.addOption( "r", false, "process directories recursively when -i is a directory " );
     options.addOption( "n", false, "output directories are nested when recursively processing nested directories (when -r is set and -i is a directory) (optional)" );
     options.addOption( "o", true, "Directs the FITS output to a file or directory (if -i is a directory) rather than console" );
+    options.addOption( "a", false, "Aggregate all file output into a siglle file (only if -o references a directory)" );
     options.addOption( "h", false, "print this message" );
     options.addOption( "v", false, "print version information" );
     options.addOption( "f", true, "alternate fits.xml configuration file location (optional)" );
@@ -291,6 +295,11 @@ public class Fits {
     } else {
       nestDirs = false;
     }
+    if (cmd.hasOption( "a" )) {
+    	aggregateOutputDir = true;
+    } else {
+    	aggregateOutputDir = false;
+    }
     
     File fitsConfigFile = null;
     try {
@@ -316,7 +325,16 @@ public class Fits {
     						"When FITS is run in directory processing mode the output location must be a directory." );
     			}
     			Fits fits = constructFits(fitsConfigFile);
-    			fits.doDirectory( inputFile, new File( outputDir ), cmd.hasOption( "x" ), cmd.hasOption( "xc" ) );
+    			Element fitsCollectionElem = new Element("fitsCollection");
+    			fitsCollectionElem = fits.doDirectory( inputFile, new File( outputDir ), cmd.hasOption( "x" ), cmd.hasOption( "xc" ), fitsCollectionElem );
+    			// if aggregating output to a single file then output for each file will not have been output to disk
+    			if (aggregateOutputDir && fitsCollectionElem.getContentSize() > 0) {
+    				Document rootDoc = new Document(fitsCollectionElem);
+    				XMLOutputter serializer = new XMLOutputter(Format.getPrettyFormat());
+    				OutputStreamWriter out = new OutputStreamWriter(new FileOutputStream(new File(outputDir, fitsCollectionElem.getName() + ".xml")),"UTF-8");
+    				serializer.output(rootDoc, out);
+    			}
+
     		} else { // inputFile is a file so output -o must either be a file or not set at all
     			String outputFile = cmd.getOptionValue( "o" );
     			if (outputFile != null && (new File( outputFile ).isDirectory())) {
@@ -386,21 +404,25 @@ public class Fits {
   }
 
   /**
-   * Recursively processes all files in the directory.
+   * Processes all files in the in the input directory and, if required, recursively process files in any nested directories.
+   * Also, output may go into nested directories in output destination if required by application parameter.
+ * @param useStandardSchemas
+ * @param fitsAggregateElem TODO
+ * @param intputFile
    *
-   * @param intputFile
-   * @param useStandardSchemas
-   * @throws IOException
+   * @return TODO
+ * @throws IOException
    * @throws XMLStreamException
    * @throws FitsException
    */
-	private void doDirectory(File inputDir, File outputDir, boolean useStandardSchemas, boolean standardCombinedFormat) throws FitsException, XMLStreamException, IOException {
+	private Element doDirectory(File inputDir, File outputDir, boolean useStandardSchemas, boolean standardCombinedFormat, Element fitsAggregateElem) throws FitsException, XMLStreamException, IOException {
 		if(inputDir.listFiles() == null) {
-			return;
+			return fitsAggregateElem;
 		}
 
 		logger.info("Processing directory " + inputDir.getAbsolutePath());
 
+//Element rootElement = new Element("fitsCollection");
 		for (File f : inputDir.listFiles()) {
 
 			if(f == null || !f.exists() || !f.canRead()) {
@@ -412,13 +434,13 @@ public class Fits {
 			if (f.isDirectory() && traverseDirs) {
 				// need to reset original directory after return from recursive call when nesting output
 				File savedDir = outputDir;
-				if (nestDirs) {
+				if (nestDirs && !aggregateOutputDir) {
 					outputDir = new File(outputDir, f.getName());
 					if ( !outputDir.exists()) {
 						outputDir.mkdir();
 					}
 				}
-				doDirectory(f, outputDir, useStandardSchemas, standardCombinedFormat);
+				doDirectory(f, outputDir, useStandardSchemas, standardCombinedFormat, fitsAggregateElem);
 				outputDir = savedDir;
 			} else if (f.isFile()) {
 				if (".DS_Store".equals(f.getName())) {
@@ -427,23 +449,32 @@ public class Fits {
 					continue;
 				}
 				FitsOutput result = doSingleFile(f);
-				String outputFile = outputDir.getPath() + File.separator + f.getName() + "." + FITS_CONFIG_FILE_NAME;
-				File output = new File(outputFile);
-				if (output.exists()) {
-					int cnt = 1;
-					while (true) {
-						outputFile = outputDir.getPath() + File.separator + f.getName() + "-" + cnt + "." + FITS_CONFIG_FILE_NAME;
-						output = new File(outputFile);
-						if (!output.exists()) {
-							break;
+				if (aggregateOutputDir) {
+					// aggregate each file's data for output to a single file
+					Element fitsElement = result.getFitsXml().detachRootElement();
+					fitsAggregateElem.addContent(fitsElement);
+				} else {
+					// output as file
+					String outputFile = outputDir.getPath() + File.separator + f.getName() + "." + FITS_CONFIG_FILE_NAME;
+					File output = new File(outputFile);
+					if (output.exists()) {
+						int cnt = 1;
+						while (true) {
+							outputFile = outputDir.getPath() + File.separator + f.getName() + "-" + cnt + "." + FITS_CONFIG_FILE_NAME;
+							output = new File(outputFile);
+							if (!output.exists()) {
+								break;
+							}
+							cnt++;
 						}
-						cnt++;
 					}
+					outputResults(result, outputFile, useStandardSchemas,
+							standardCombinedFormat, true);
 				}
-				outputResults(result, outputFile, useStandardSchemas,
-						standardCombinedFormat, true);
 			}
 		}
+
+		return fitsAggregateElem;
 	}
 
   /**
